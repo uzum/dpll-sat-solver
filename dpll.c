@@ -242,15 +242,29 @@ int chooseLiteral(struct Clause * root){
   return root->head->index;
 }
 
+struct Clause * branch(struct Clause * root, int literalIndex){
+
+}
+
 int dpll(struct Clause * root){
   int sol = checkSolution(root);
   printf("Solution: %d\n", sol);
   if (sol != UNCERTAIN) return sol;
 
-  if(unitPropagation(root)) return dpll(root);
-  if(pureLiteralElimination(root)) return dpll(root);
+  while(1){
+    printClauseSet(root);
+    if(!unitPropagation(root)) break;
+  }
+
+  while(1){
+    printClauseSet(root);
+    if(!pureLiteralElimination(root)) break;
+  }
 
   // branch here
+  int literalIndex = chooseLiteral(root);
+  return dpll(branch(root, literalIndex)) ||
+         dpll(branch(root, -literalIndex));
 }
 
 int main(int argc, char *argv[]){
