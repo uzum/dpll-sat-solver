@@ -2,6 +2,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define SATISFIABLE 1
+#define UNSATISFIABLE -1
+#define UNCERTAIN 0
+
 int DEBUG = 1;
 int clauseNumber, variableNumber;
 
@@ -16,6 +20,7 @@ struct Clause {
 };
 
 void printClauseSet(struct Clause * root){
+  printf("xxxxxxxxxxxxx CLAUSE SET xxxxxxxxxxxx\n\n");
   struct Clause* itr = root;
   while (itr != NULL){
     struct Literal * l = itr->head;
@@ -26,6 +31,7 @@ void printClauseSet(struct Clause * root){
     printf("\n");
     itr = itr->next;
   }
+  printf("xxxxxxxxxxxxx CLAUSE SET xxxxxxxxxxxx\n\n");
 }
 
 int findUnitClause(struct Clause * root){
@@ -69,22 +75,6 @@ int findPureLiteral(struct Clause * root){
   return 0;
 }
 
-void removeClause(struct Clause * root, struct Clause * prev, struct Clause * target){
-  if (target == root) {
-    *root = *target->next;
-  } else {
-    prev->next = target->next;
-  }
-}
-
-void removeLiteral(struct Clause * clause, struct Literal * prev, struct Literal * target){
-  if (target == clause->head) {
-    clause->head = target->next;
-  } else {
-    prev->next = target->next;
-  }
-}
-
 int unitPropagation(struct Clause * root){
   int unitLiteralIndex = findUnitClause(root);
   if (DEBUG) printf("unit clause found with literal: %d\n", unitLiteralIndex);
@@ -99,11 +89,13 @@ int unitPropagation(struct Clause * root){
       if (currentL->index == unitLiteralIndex) {
         // remove this clause
         if (DEBUG) printf("Removing the clause that starts with %d\n", itr->head->index);
-        if (itr == root) *root = *root->next;
-        else {
+        if (itr == root){
+          *root = *(root->next);
+          itr = NULL;
+        } else {
           prev->next = itr->next;
+          itr = prev;
         }
-        itr = prev; 
         break;
       } else if (currentL->index == -unitLiteralIndex) {
         // remove this literal
@@ -119,7 +111,7 @@ int unitPropagation(struct Clause * root){
       currentL = currentL->next;
     }
     prev = itr;
-    itr = itr->next;
+    itr = itr == NULL ? root : itr->next;
   }
 }
 
@@ -136,17 +128,19 @@ int pureLiteralElimination(struct Clause * root){
       if (l->index == pureLiteralIndex) {
         // remove this clause
         if (DEBUG) printf("Removing the clause that starts with %d\n", itr->head->index);
-        if (itr == root) *root = *root->next;
-        else {
+        if (itr == root){
+          *root = *(root->next);
+          itr = NULL;
+        } else {
           prev->next = itr->next;
+          itr = prev;
         }
-        itr = prev; 
         break;
       }
       l = l->next;
     }
     prev = itr;
-    itr = itr->next;
+    itr = itr == NULL ? root : itr->next;
   }
 }
 
@@ -210,15 +204,66 @@ struct Clause * readClauseSet(char * filename){
   return root;
 }
 
+int areAllClausesUnit(struct Clause * root){
+  int * literalLookup = (int*) calloc(variableNumber + 1, sizeof(int));
+
+  struct Clause* itr = root;
+  while (itr != NULL){
+    struct Literal * l = itr->head;
+    while (l != NULL){
+      if (l->next != NULL) return 0;
+      int seen = literalLookup[abs(l->index)];
+      if (seen == 0) literalLookup[abs(l->index)] = sign(l->index);
+      else if (seen == -1 && sign(l->index) == 1) return 0;
+      else if (seen == 1 && sign(l->index) == -1) return 0;      
+      l = l->next;
+    }
+    itr = itr->next;
+  }
+  return 1;
+}
+
+int containsEmptyClause(struct Clause * root){
+  struct Clause* itr = root;
+  while (itr != NULL){
+    if(itr->head == NULL) return 1;
+    itr = itr->next;
+  }
+  return 0;
+}
+
+int checkSolution(struct Clause * root){
+  if (areAllClausesUnit(root)) return SATISFIABLE;
+  if (containsEmptyClause(root)) return UNSATISFIABLE;
+  return UNCERTAIN;
+}
+
+int chooseLiteral(struct Clause * root){
+  return root->head->index;
+}
+
+int dpll(struct Clause * root){
+  int sol = checkSolution(root);
+  printf("Solution: %d\n", sol);
+  if (sol != UNCERTAIN) return sol;
+
+  if(unitPropagation(root)) return dpll(root);
+  if(pureLiteralElimination(root)) return dpll(root);
+
+  // branch here
+}
+
 int main(int argc, char *argv[]){
   if (argc < 2) {
     printf("Filename should be provided\n");
     return 1;
   }
 
-  struct Clause * root = readClauseSet(argv[1]);
 
-  int result = unitPropagation(root);
+  struct Clause * root = readClauseSet(argv[1]);
   printClauseSet(root);
+  dpll(root);
+  printClauseSet(root);
+
   return 0;
 }
