@@ -19,6 +19,20 @@ struct Clause {
   struct Clause * next;
 };
 
+struct Clause * createClause(){
+  struct Clause * instance = malloc(sizeof(struct Clause));
+  instance->head = NULL;
+  instance->next = NULL;
+  return instance;
+}
+
+struct Literal * createLiteral(){
+  struct Literal * instance = malloc(sizeof(struct Literal));
+  instance->next = NULL;
+  instance->index = 0;
+  return instance;
+}
+
 void printClauseSet(struct Clause * root){
   printf("xxxxxxxxxxxxx CLAUSE SET xxxxxxxxxxxx\n\n");
   struct Clause* itr = root;
@@ -39,6 +53,7 @@ int findUnitClause(struct Clause * root){
   while (itr != NULL){
     if (itr->head == NULL) {
       if (DEBUG) printf("Empty clause\n");
+      continue;
     }
     if(itr->head->next == NULL){
       return itr->head->index;
@@ -84,7 +99,7 @@ int unitPropagation(struct Clause * root){
   struct Clause * prev;
   while (itr != NULL){
     struct Literal * currentL = itr->head;
-    struct Literal * previousL;
+    struct Literal * previousL = createLiteral();
     while (currentL != NULL){
       if (currentL->index == unitLiteralIndex) {
         // remove this clause
@@ -153,8 +168,8 @@ struct Clause * readClauseSet(char * filename){
   if (fp == NULL) exit(1);
 
   char * token;
-  struct Clause * root, * currentClause, * previousClause;
-  struct Literal * currentLiteral, * previousLiteral;
+  struct Clause * root = NULL, * currentClause = NULL, * previousClause = NULL;
+  struct Literal * currentLiteral = NULL, * previousLiteral = NULL;
   
   while(fgets(line, sizeof(line), fp)){
     if (line[0] == 'c') continue;
@@ -163,7 +178,7 @@ struct Clause * readClauseSet(char * filename){
       printf("Number of variables: %d\n", variableNumber);
       printf("Number of clauses: %d\n", clauseNumber);
     } else {
-      currentClause = malloc(sizeof(struct Clause));
+      currentClause = createClause();
       if (root == NULL) {
         if (DEBUG) printf("setting root\n");
         root = currentClause;
@@ -176,7 +191,7 @@ struct Clause * readClauseSet(char * filename){
       token = strtok(line, " ");
       while(token != NULL){
         int literalIndex = atoi(token);
-        currentLiteral = malloc(sizeof(struct Literal));
+        currentLiteral = createLiteral();
         currentLiteral->index = literalIndex;
         if (literalIndex != 0){
           if (currentClause->head == NULL){
@@ -242,8 +257,48 @@ int chooseLiteral(struct Clause * root){
   return root->head->index;
 }
 
-struct Clause * branch(struct Clause * root, int literalIndex){
+struct Clause * cloneClause(struct Clause * origin){
+  struct Clause * cloneClause = createClause();
+  struct Literal * iteratorLiteral = origin->head;
+  struct Literal * previousLiteral = NULL;
+  while (iteratorLiteral != NULL){
+    struct Literal * literalClone = createLiteral();
+    literalClone->index = iteratorLiteral->index;
+    if (cloneClause->head == NULL) {
+      cloneClause->head = literalClone;
+    }
+    if (previousLiteral != NULL) {
+      previousLiteral->next = literalClone;
+    }
+    previousLiteral = literalClone;
+    iteratorLiteral = iteratorLiteral->next;
+  }
+  return cloneClause;
+}
 
+struct Clause * branch(struct Clause * root, int literalIndex){
+  if (DEBUG) printf("Branching with literal %d\n", literalIndex);
+  struct Clause * newRoot = NULL,
+                * currentClause = NULL,
+                * previousClause = NULL,
+                * iterator = root;
+  while (iterator != NULL){
+    struct Clause * clone = cloneClause(iterator);
+    if (newRoot == NULL) {
+      newRoot = clone;
+    }
+    if (previousClause != NULL) {
+      previousClause->next = clone;
+    }
+    previousClause = clone;
+    iterator = iterator->next;
+  }
+  struct Clause * addedClause = createClause();
+  struct Literal * addedLiteral = createLiteral();
+  addedLiteral->index = literalIndex;
+  addedClause->head = addedLiteral;
+  previousClause->next = addedClause;
+  return newRoot;
 }
 
 int dpll(struct Clause * root){
@@ -273,11 +328,11 @@ int main(int argc, char *argv[]){
     return 1;
   }
 
-
   struct Clause * root = readClauseSet(argv[1]);
   printClauseSet(root);
+
   dpll(root);
-  printClauseSet(root);
+  // printClauseSet(root);
 
   return 0;
 }
