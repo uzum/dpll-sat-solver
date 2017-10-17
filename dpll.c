@@ -8,6 +8,7 @@
 
 int DEBUG = 1;
 int clauseNumber, variableNumber;
+int * valuation;
 
 struct Literal {
   struct Literal * next;
@@ -31,6 +32,14 @@ struct Literal * createLiteral(){
   instance->next = NULL;
   instance->index = 0;
   return instance;
+}
+
+void printValuation(){
+  int i;
+  for (i = 1; i < variableNumber + 1; i++) {
+    printf("%d ", valuation[i]);
+  }
+  printf("\n");
 }
 
 void printClauseSet(struct Clause * root){
@@ -95,6 +104,10 @@ int unitPropagation(struct Clause * root){
   if (DEBUG) printf("unit clause found with literal: %d\n", unitLiteralIndex);
   if (unitLiteralIndex == 0) return 0;
 
+  printf("Setting value of literal %d as %d\n", abs(unitLiteralIndex), sign(unitLiteralIndex));
+
+  valuation[abs(unitLiteralIndex)] = unitLiteralIndex > 0 ? 1 : 0;
+
   struct Clause * itr = root;
   struct Clause * prev;
   while (itr != NULL){
@@ -134,6 +147,10 @@ int pureLiteralElimination(struct Clause * root){
   int pureLiteralIndex = findPureLiteral(root);
   if (DEBUG) printf("pure literal found: %d\n", pureLiteralIndex);
   if (pureLiteralIndex == 0) return 0;
+
+  printf("Setting value of literal %d as %d\n", abs(pureLiteralIndex), sign(pureLiteralIndex));
+
+  valuation[abs(pureLiteralIndex)] = pureLiteralIndex > 0 ? 1 : 0;
 
   struct Clause * itr = root;
   struct Clause * prev;
@@ -177,6 +194,9 @@ struct Clause * readClauseSet(char * filename){
       sscanf(line, "p cnf %d %d", &variableNumber, &clauseNumber);
       printf("Number of variables: %d\n", variableNumber);
       printf("Number of clauses: %d\n", clauseNumber);
+      valuation = (int*) calloc(variableNumber + 1, sizeof(int));
+      int i;
+      for (i = 0; i < variableNumber + 1; i++) valuation[i] = -1;
     } else {
       currentClause = createClause();
       if (root == NULL) {
@@ -226,7 +246,6 @@ int areAllClausesUnit(struct Clause * root){
   while (itr != NULL){
     struct Literal * l = itr->head;
     while (l != NULL){
-      if (l->next != NULL) return 0;
       int seen = literalLookup[abs(l->index)];
       if (seen == 0) literalLookup[abs(l->index)] = sign(l->index);
       else if (seen == -1 && sign(l->index) == 1) return 0;
@@ -235,6 +254,19 @@ int areAllClausesUnit(struct Clause * root){
     }
     itr = itr->next;
   }
+
+  itr = root;
+  while (itr != NULL){
+    struct Literal * l = itr->head;
+    while (l != NULL){
+      if (valuation[abs(l->index)] == -1) {
+        valuation[abs(l->index)] = l->index > 0 ? 1 : 0;
+      }
+      l = l->next;
+    }
+    itr = itr->next;
+  }
+
   return 1;
 }
 
@@ -248,12 +280,13 @@ int containsEmptyClause(struct Clause * root){
 }
 
 int checkSolution(struct Clause * root){
-  if (areAllClausesUnit(root)) return SATISFIABLE;
   if (containsEmptyClause(root)) return UNSATISFIABLE;
+  if (areAllClausesUnit(root)) return SATISFIABLE;
   return UNCERTAIN;
 }
 
 int chooseLiteral(struct Clause * root){
+  // todo: choose a literal that does not have a valuation yet
   return root->head->index;
 }
 
@@ -278,6 +311,10 @@ struct Clause * cloneClause(struct Clause * origin){
 
 struct Clause * branch(struct Clause * root, int literalIndex){
   if (DEBUG) printf("Branching with literal %d\n", literalIndex);
+
+  printf("Setting value of literal %d as %d\n", abs(literalIndex), sign(literalIndex));
+  valuation[abs(literalIndex)] = literalIndex > 0 ? 1 : 0;
+
   struct Clause * newRoot = NULL,
                 * currentClause = NULL,
                 * previousClause = NULL,
@@ -302,24 +339,41 @@ struct Clause * branch(struct Clause * root, int literalIndex){
 }
 
 int dpll(struct Clause * root){
-  int sol = checkSolution(root);
-  printf("Solution: %d\n", sol);
-  if (sol != UNCERTAIN) return sol;
+  printClauseSet(root);
+  if (checkSolution(root) != UNCERTAIN) return checkSolution(root);
 
   while(1){
     printClauseSet(root);
-    if(!unitPropagation(root)) break;
+    if (checkSolution(root) != UNCERTAIN) return checkSolution(root);
+    if (!unitPropagation(root)) break;
   }
 
   while(1){
     printClauseSet(root);
-    if(!pureLiteralElimination(root)) break;
+    if (checkSolution(root) != UNCERTAIN) return checkSolution(root);
+    if (!pureLiteralElimination(root)) break;
   }
 
   // branch here
   int literalIndex = chooseLiteral(root);
-  return dpll(branch(root, literalIndex)) ||
-         dpll(branch(root, -literalIndex));
+  int try1 = dpll(branch(root, literalIndex));
+  if (try1 == SATISFIABLE) return try1;
+  else return dpll(branch(root, -literalIndex));
+}
+
+void writeSolution(struct Clause * root, char * filename){
+  FILE *f = fopen(filename, "w");
+  if (f == NULL) {
+    printf("Error opening file!\n");
+    exit(1);
+  }
+
+  int i;
+  for (i = 1; i < variableNumber + 1; i++) {
+    fprintf(f, "%d %d\n", i, valuation[i]);
+  }
+
+  fclose(f);
 }
 
 int main(int argc, char *argv[]){
@@ -329,10 +383,13 @@ int main(int argc, char *argv[]){
   }
 
   struct Clause * root = readClauseSet(argv[1]);
-  printClauseSet(root);
-
-  dpll(root);
-  // printClauseSet(root);
-
+  int dpllResult = dpll(root);
+  printf("DPLL finished\n");
+  printValuation();
+  if (dpllResult == SATISFIABLE) {
+    writeSolution(root, argv[2]);
+  } else {
+    printf("UNSATISFIABLE\n");
+  }
   return 0;
 }
