@@ -6,7 +6,7 @@
 #define UNSATISFIABLE -1
 #define UNCERTAIN 0
 
-int DEBUG = 1;
+int DEBUG = 0;
 int clauseNumber, variableNumber;
 int * valuation;
 
@@ -82,7 +82,6 @@ int findPureLiteral(struct Clause * root){
   while (itr != NULL){
     struct Literal * l = itr->head;
     while (l != NULL){
-      if (DEBUG) printf("inspecting literal %d\n", l->index);
       int seen = literalLookup[abs(l->index)];
       if (seen == 0) literalLookup[abs(l->index)] = sign(l->index);
       else if (seen == -1 && sign(l->index) == 1) literalLookup[abs(l->index)] = 2;
@@ -93,7 +92,6 @@ int findPureLiteral(struct Clause * root){
   }
   int i;
   for (i = 1; i < variableNumber + 1; i++) {
-    printf("literal lookup @%d: %d\n", i, literalLookup[i]);
     if (literalLookup[i] == -1 || literalLookup[i] == 1) return i * literalLookup[i];
   }
   return 0;
@@ -104,7 +102,7 @@ int unitPropagation(struct Clause * root){
   if (DEBUG) printf("unit clause found with literal: %d\n", unitLiteralIndex);
   if (unitLiteralIndex == 0) return 0;
 
-  printf("Setting value of literal %d as %d\n", abs(unitLiteralIndex), sign(unitLiteralIndex));
+  if (DEBUG) printf("Setting value of literal %d as %d\n", abs(unitLiteralIndex), sign(unitLiteralIndex));
 
   valuation[abs(unitLiteralIndex)] = unitLiteralIndex > 0 ? 1 : 0;
 
@@ -148,7 +146,7 @@ int pureLiteralElimination(struct Clause * root){
   if (DEBUG) printf("pure literal found: %d\n", pureLiteralIndex);
   if (pureLiteralIndex == 0) return 0;
 
-  printf("Setting value of literal %d as %d\n", abs(pureLiteralIndex), sign(pureLiteralIndex));
+  if (DEBUG) printf("Setting value of literal %d as %d\n", abs(pureLiteralIndex), sign(pureLiteralIndex));
 
   valuation[abs(pureLiteralIndex)] = pureLiteralIndex > 0 ? 1 : 0;
 
@@ -187,7 +185,7 @@ struct Clause * readClauseSet(char * filename){
   char * token;
   struct Clause * root = NULL, * currentClause = NULL, * previousClause = NULL;
   struct Literal * currentLiteral = NULL, * previousLiteral = NULL;
-  
+
   while(fgets(line, sizeof(line), fp)){
     if (line[0] == 'c') continue;
     if (line[0] == 'p') {
@@ -205,9 +203,9 @@ struct Clause * readClauseSet(char * filename){
       }
       if (previousClause != NULL) {
         if (DEBUG) printf("setting current as the next of previous clause\n");
-        previousClause->next = currentClause;  
+        previousClause->next = currentClause;
       }
-      
+
       token = strtok(line, " ");
       while(token != NULL){
         int literalIndex = atoi(token);
@@ -218,7 +216,7 @@ struct Clause * readClauseSet(char * filename){
             if (DEBUG) printf("setting literal %d as head of current clause\n", currentLiteral->index);
             currentClause->head = currentLiteral;
           }
-          
+
           if (previousLiteral != NULL){
             if (DEBUG) printf("setting literal %d as the next of previous literal\n", currentLiteral->index);
             previousLiteral->next = currentLiteral;
@@ -226,8 +224,8 @@ struct Clause * readClauseSet(char * filename){
         }
 
         if (DEBUG) printf("current literal is now previous literal\n");
-        previousLiteral = currentLiteral; 
-         
+        previousLiteral = currentLiteral;
+
         token = strtok(NULL, " ");
       }
       if (DEBUG) printf("current clause is now previous clause\n");
@@ -235,7 +233,7 @@ struct Clause * readClauseSet(char * filename){
     }
   }
   fclose(fp);
-  
+
   return root;
 }
 
@@ -249,7 +247,7 @@ int areAllClausesUnit(struct Clause * root){
       int seen = literalLookup[abs(l->index)];
       if (seen == 0) literalLookup[abs(l->index)] = sign(l->index);
       else if (seen == -1 && sign(l->index) == 1) return 0;
-      else if (seen == 1 && sign(l->index) == -1) return 0;      
+      else if (seen == 1 && sign(l->index) == -1) return 0;
       l = l->next;
     }
     itr = itr->next;
@@ -259,9 +257,9 @@ int areAllClausesUnit(struct Clause * root){
   while (itr != NULL){
     struct Literal * l = itr->head;
     while (l != NULL){
-      if (valuation[abs(l->index)] == -1) {
+      // if (valuation[abs(l->index)] == -1) {
         valuation[abs(l->index)] = l->index > 0 ? 1 : 0;
-      }
+      // }
       l = l->next;
     }
     itr = itr->next;
@@ -311,8 +309,8 @@ struct Clause * cloneClause(struct Clause * origin){
 
 struct Clause * branch(struct Clause * root, int literalIndex){
   if (DEBUG) printf("Branching with literal %d\n", literalIndex);
+  if (DEBUG) printf("Setting value of literal %d as %d\n", abs(literalIndex), sign(literalIndex));
 
-  printf("Setting value of literal %d as %d\n", abs(literalIndex), sign(literalIndex));
   valuation[abs(literalIndex)] = literalIndex > 0 ? 1 : 0;
 
   struct Clause * newRoot = NULL,
@@ -334,31 +332,33 @@ struct Clause * branch(struct Clause * root, int literalIndex){
   struct Literal * addedLiteral = createLiteral();
   addedLiteral->index = literalIndex;
   addedClause->head = addedLiteral;
-  previousClause->next = addedClause;
-  return newRoot;
+
+  addedClause->next = newRoot;
+  return addedClause;
 }
 
 int dpll(struct Clause * root){
-  printClauseSet(root);
-  if (checkSolution(root) != UNCERTAIN) return checkSolution(root);
+  int solution = checkSolution(root);
+  if (solution != UNCERTAIN) return solution;
 
   while(1){
-    printClauseSet(root);
-    if (checkSolution(root) != UNCERTAIN) return checkSolution(root);
+    solution = checkSolution(root);
+    if (solution != UNCERTAIN) return solution;
     if (!unitPropagation(root)) break;
   }
 
   while(1){
-    printClauseSet(root);
-    if (checkSolution(root) != UNCERTAIN) return checkSolution(root);
+    int solution = checkSolution(root);
+    if (solution != UNCERTAIN) return solution;
     if (!pureLiteralElimination(root)) break;
   }
 
   // branch here
   int literalIndex = chooseLiteral(root);
+  if (DEBUG) printf("branching on literal %d\n", literalIndex);
   int try1 = dpll(branch(root, literalIndex));
   if (try1 == SATISFIABLE) return try1;
-  else return dpll(branch(root, -literalIndex));
+  return dpll(branch(root, -literalIndex));
 }
 
 void writeSolution(struct Clause * root, char * filename){
