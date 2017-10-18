@@ -394,23 +394,49 @@ struct Clause * branch(struct Clause * root, int literalIndex){
   return addedClause;
 }
 
+void removeLiteral(struct Literal * literal){
+  while (literal != NULL) {
+    struct Literal * next = literal->next;
+    free(literal);
+    literal = next;
+  }
+}
+
+void removeClause(struct Clause * root){
+  while (root != NULL) {
+    struct Clause * next = root->next;
+    if (root->head != NULL) removeLiteral(root->head);
+    free(root);
+    root = next;
+  }
+}
+
 // DPLL algorithm with recursive backtracking
 int dpll(struct Clause * root){
   // first check if we are already in a solved state
   int solution = checkSolution(root);
-  if (solution != UNCERTAIN) return solution;
+  if (solution != UNCERTAIN){
+    removeClause(root);
+    return solution;
+  }
 
   // do unit-propagation as long as the clause set allows
   while(1){
     solution = checkSolution(root);
-    if (solution != UNCERTAIN) return solution;
+    if (solution != UNCERTAIN){
+      removeClause(root);
+      return solution;
+    }
     if (!unitPropagation(root)) break;
   }
 
   // then do pure-literal-elimination as long as the clause set allows
   while(1){
     int solution = checkSolution(root);
-    if (solution != UNCERTAIN) return solution;
+    if (solution != UNCERTAIN) {
+      removeClause(root);
+      return solution;
+    }
     if (!pureLiteralElimination(root)) break;
   }
 
@@ -456,5 +482,6 @@ int main(int argc, char *argv[]){
   } else {
     printf("UNSATISFIABLE\n");
   }
+  removeClause(root);
   return 0;
 }
