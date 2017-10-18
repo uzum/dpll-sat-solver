@@ -158,6 +158,7 @@ int unitPropagation(struct Clause * root){
     prev = itr;
     itr = itr == NULL ? root : itr->next;
   }
+  return 1;
 }
 
 // implements pure literal elimination algorithm
@@ -198,6 +199,7 @@ int pureLiteralElimination(struct Clause * root){
     prev = itr;
     itr = itr == NULL ? root : itr->next;
   }
+  return 1;
 }
 
 // reads the clause set from the given file and constructs a linked list of linked lists
