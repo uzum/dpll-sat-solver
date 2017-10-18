@@ -283,7 +283,7 @@ int areAllClausesUnit(struct Clause * root){
     while (l != NULL){
       int seen = literalLookup[abs(l->index)];
       if (seen == 0) literalLookup[abs(l->index)] = sign(l->index);
-      // if we previously has seen this literal with the opposite sign, return false;
+      // if we previously have seen this literal with the opposite sign, return false
       else if (seen == -1 && sign(l->index) == 1) return 0;
       else if (seen == 1 && sign(l->index) == -1) return 0;
       l = l->next;
